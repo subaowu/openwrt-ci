@@ -60,6 +60,7 @@ jobs:
 
     - name: Prefetch gecoosac binary (mirror fallback) + HASH LOG
       run: |
+        mkdir -p $OPENWRT_PATH/dl
         V=V2.2.202510151606
         U1="https://github.com/lyin888/gecoosac-core/releases/download/$V/ac_linux_arm64"
         U2="https://github.com/hxlls/gecoosac-core/releases/download/V2.2.20251015/ac_linux_arm64"
