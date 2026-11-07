@@ -1,0 +1,111 @@
+name: ZN-M2-25.12-NOWIFI
+
+on:
+  workflow_dispatch:
+  # 不挂 cron：锁定策略——只在主动重构时构建
+
+env:
+  REPO_URL: https://github.com/LiBwrt/LibWrt.git
+  REPO_BRANCH: 25.12-nss
+  CONFIG_FILE: configs/zn-m2.config
+  DIY_SCRIPT: scripts/diy.sh
+  FIRMWARE_TAG: ZN-M2-25.12-NOWIFI
+  TZ: Asia/Shanghai
+
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Init Environment
+      env: { DEBIAN_FRONTEND: noninteractive }
+      run: |
+        sudo bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+        sudo timedatectl set-timezone "$TZ"
+
+    - name: Maximize Build Space
+      uses: easimon/maximize-build-space@master
+      with:
+        swap-size-mb: 1024
+        temp-reserve-mb: 100
+        root-reserve-mb: 1024
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Clone Source (pinned)
+      run: |
+        git clone --depth 1 -b $REPO_BRANCH $REPO_URL openwrt
+        cd openwrt
+        echo "PINNED_HEAD=$(git rev-parse HEAD)" >> $GITHUB_ENV
+        echo "OPENWRT_PATH=$PWD" >> $GITHUB_ENV
+
+    - name: Prepare Feeds (pinned branches + custom feed)
+      run: |
+        cd $GITHUB_WORKSPACE/fw-feed
+        git init -q -b main && git config user.email ci@local && git config user.name ci
+        git add -A && git commit -qm "nc feed"
+        cd $GITHUB_WORKSPACE
+        sed "s|\${WORKSPACE}|$GITHUB_WORKSPACE|g" feeds.conf.seed > $OPENWRT_PATH/feeds.conf.default
+        cd $OPENWRT_PATH
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a -p ncfeed
+        ./scripts/feeds install -a
+
+    - name: Apply Config & DIY
+      run: |
+        cp $CONFIG_FILE $OPENWRT_PATH/.config
+        chmod +x $DIY_SCRIPT
+        cd $OPENWRT_PATH
+        $GITHUB_WORKSPACE/$DIY_SCRIPT
+
+    - name: Prefetch gecoosac binary (mirror fallback) + HASH LOG
+      run: |
+        V=V2.2.202510151606
+        U1="https://github.com/lyin888/gecoosac-core/releases/download/$V/ac_linux_arm64"
+        U2="https://github.com/hxlls/gecoosac-core/releases/download/V2.2.20251015/ac_linux_arm64"
+        F=$OPENWRT_PATH/dl/ac_linux_arm64
+        curl -fsSL --retry 3 -o "$F" "$U1" || curl -fsSL --retry 3 -o "$F" "$U2"
+        echo "===================== gecoosac sha256 ======================="
+        sha256sum "$F"
+        echo "=== 回填到 fw-feed/net/gecoosac/Makefile 的 PKG_HASH ==="
+
+    - name: Download DL Packages
+      run: |
+        cd $OPENWRT_PATH
+        make defconfig
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \; -exec rm -f {} \;
+
+    - name: Compile
+      id: compile
+      run: |
+        cd $OPENWRT_PATH
+        make -j$(nproc) || make -j1 V=sc
+        echo "status=success" >> $GITHUB_OUTPUT
+
+    - name: Rootfs Budget Gate (24MB red line)
+      if: steps.compile.outputs.status == 'success'
+      run: |
+        cd $OPENWRT_PATH/bin/targets/*/*
+        ls -lA *zn_m2* || true
+        for f in *-squashfs-sysupgrade.bin; do
+          sz=$(stat -c%s "$f")
+          echo "$f = $sz bytes ($(( sz / 1024 / 1024 )) MB)"
+          if [ "$sz" -gt 24117248 ]; then echo "::error::rootfs exceeds 23MB red line"; exit 1; fi
+        done
+
+    - name: Release
+      if: steps.compile.outputs.status == 'success'
+      uses: ncipollo/release-action@v1
+      with:
+        name: ${{ env.FIRMWARE_TAG }} ${{ github.run_number }}
+        tag: ${{ env.FIRMWARE_TAG }}
+        allowUpdates: true
+        token: ${{ secrets.GITHUB_TOKEN }}
+        artifacts: ${{ env.OPENWRT_PATH }}/bin/targets/*/*/*.bin,${{ env.OPENWRT_PATH }}/bin/targets/*/*/sha256sums,${{ env.OPENWRT_PATH }}/.config
+        body: |
+          ### ZN-M2 (IPQ6018) 25.12-nss NOWIFI
+          - 底座: LiBwrt/LibWrt `${{ env.PINNED_HEAD }}`
+          - 默认地址 192.168.1.1 / 密码 password（首刷 nc-provision 改 192.168.5.1）
+          - 含: sqm(cake) / tailscale / watchcat / gecoosac / nc-provision
+          - ⚠️ sha256 以 sha256sums 附件为准；gecoosac 二进制哈希见构建日志
