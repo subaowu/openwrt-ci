@@ -76,12 +76,21 @@ jobs:
         make defconfig
         make download -j8
         find dl -size -1024c -exec ls -l {} \; -exec rm -f {} \;
+        
+    - name: Cache Toolchain
+      uses: stupidloud/cachewrtbuild@main
+      with:
+        ccache: false
+        toolchain: true
+        mixkey: zn-m2-2512
+        prefix: ${{ github.workspace }}/openwrt
 
     - name: Compile
       id: compile
       run: |
         cd $OPENWRT_PATH
-        make -j$(nproc) || make -j1 V=sc
+        echo 'CONFIG_KERNEL_NF_CONNTRACK_DSCPREMARK_EXT=n' >> .config
+        if [ -f .cache/.pruned_dummy_toolchain ]; then make -j1; else make -j$(nproc) || make -j1 V=sc; fi
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: Rootfs Budget Gate (24MB red line)
