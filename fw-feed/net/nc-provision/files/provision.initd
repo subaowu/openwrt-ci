@@ -1,0 +1,11 @@
+#!/bin/sh /etc/rc.common
+# 首刷执行一次后自我 disable，避免每次开盖 uci 抖动
+START=98
+
+boot() {
+    if [ ! -f /tmp/.nc-provision-marker ] && [ ! -f /etc/.nc-provisioned ]; then
+        /usr/sbin/nc-provision
+        touch /etc/.nc-provisioned
+        /etc/init.d/nc-provision disable
+    fi
+}
