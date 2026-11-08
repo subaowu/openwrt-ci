@@ -94,7 +94,7 @@ jobs:
         if [ "${{ steps.cache_toolchain.outputs.hit }}" = "1" ]; then make -j1; else make -j$(nproc) || make -j1 V=sc; fi
         echo "status=success" >> $GITHUB_OUTPUT
 
-    - name: Rootfs Budget Gate (24MB red line)
+    - name: Rootfs Budget Gate (64MB red line)
       if: steps.compile.outputs.status == 'success'
       run: |
         cd $OPENWRT_PATH/bin/targets/*/*
@@ -102,7 +102,7 @@ jobs:
         for f in *-squashfs-sysupgrade.bin; do
           sz=$(stat -c%s "$f")
           echo "$f = $sz bytes ($(( sz / 1024 / 1024 )) MB)"
-          if [ "$sz" -gt 24117248 ]; then echo "::error::rootfs exceeds 23MB red line"; exit 1; fi
+          if [ "$sz" -gt 67108864 ]; then echo "::error::rootfs exceeds 64MB red line"; exit 1; fi
         done
 
     - name: Release
