@@ -78,6 +78,7 @@ jobs:
         find dl -size -1024c -exec ls -l {} \; -exec rm -f {} \;
         
     - name: Cache Toolchain
+      id: cache_toolchain
       uses: stupidloud/cachewrtbuild@main
       with:
         ccache: false
@@ -90,7 +91,7 @@ jobs:
       run: |
         cd $OPENWRT_PATH
         echo 'CONFIG_KERNEL_NF_CONNTRACK_DSCPREMARK_EXT=n' >> .config
-        if [ -f .cache/.pruned_dummy_toolchain ]; then make -j1; else make -j$(nproc) || make -j1 V=sc; fi
+        if [ "${{ steps.cache_toolchain.outputs.hit }}" = "1" ]; then make -j1; else make -j$(nproc) || make -j1 V=sc; fi
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: Rootfs Budget Gate (24MB red line)
