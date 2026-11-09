@@ -91,7 +91,7 @@ jobs:
       run: |
         cd $OPENWRT_PATH
         echo 'CONFIG_KERNEL_NF_CONNTRACK_DSCPREMARK_EXT=n' >> .config
-        if [ "${{ steps.cache_toolchain.outputs.hit }}" = "1" ]; then make -j1; else make -j$(nproc) || make -j1 V=sc; fi
+        make -j$(nproc) || make -j1 V=sc
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: Rootfs Budget Gate (64MB red line)
