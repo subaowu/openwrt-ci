@@ -11,7 +11,7 @@ PKG_RELEASE:=1
 PKG_SOURCE:=ac_linux_arm64
 PKG_SOURCE_URL:=https://github.com/lyin888/gecoosac-core/releases/download/V2.2.202510151606
 # 首构建自举：CI 打印 sha256 后，回填此处
-PKG_HASH:=skip
+PKG_HASH:=66ef7f030954216fcf503bd4586cc3e87ba68f986f9718afc1fd16d6cd924ff0
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 
